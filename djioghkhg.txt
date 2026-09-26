@@ -1,0 +1,165 @@
+!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hava Proqnozu</title>
+<style>
+  :root{
+    --sky-top:#2b6cb0;
+    --sky-bottom:#63b3ed;
+    --card-bg:rgba(255,255,255,0.14);
+    --text:#f5f9ff;
+    --muted:#d9e8fa;
+    --accent:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:'Segoe UI', Tahoma, sans-serif;
+    background:linear-gradient(180deg,var(--sky-top),var(--sky-bottom));
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .card{
+    width:100%;
+    max-width:420px;
+    background:var(--card-bg);
+    backdrop-filter:blur(10px);
+    border-radius:20px;
+    padding:28px;
+    box-shadow:0 20px 40px rgba(0,0,0,0.25);
+  }
+  h1{
+    margin:0 0 18px;
+    font-size:22px;
+    font-weight:600;
+  }
+  form{
+    display:flex;
+    gap:8px;
+    margin-bottom:20px;
+  }
+  input{
+    flex:1;
+    padding:12px 14px;
+    border-radius:10px;
+    border:none;
+    font-size:15px;
+    outline:none;
+  }
+  button{
+    padding:12px 18px;
+    border-radius:10px;
+    border:none;
+    background:var(--accent);
+    color:#3a2c00;
+    font-weight:600;
+    cursor:pointer;
+    font-size:15px;
+  }
+  button:hover{ filter:brightness(1.05); }
+  #result{ min-height:120px; }
+  .temp{
+    font-size:56px;
+    font-weight:700;
+    margin:6px 0;
+  }
+  .desc{
+    font-size:16px;
+    color:var(--muted);
+    margin-bottom:14px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .stat{
+    background:rgba(255,255,255,0.1);
+    border-radius:12px;
+    padding:10px 12px;
+    font-size:14px;
+  }
+  .stat b{ display:block; font-size:17px; }
+  .msg{ color:var(--muted); font-size:14px; }
+  .loading{ opacity:0.7; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Hava proqnozu</h1>
+    <form id="searchForm">
+      <input id="cityInput" type="text" placeholder="Şəhər adı (məs: Bakı)" required>
+      <button type="submit">Axtar</button>
+    </form>
+    <div id="result">
+      <p class="msg">Şəhər adını daxil edin — məlumat API-dən canlı gətiriləcək.</p>
+    </div>
+  </div>
+
+<script>
+const codeMap = {
+  0:"Açıq səma", 1:"Əsasən açıq", 2:"Qismən buludlu", 3:"Tutqun",
+  45:"Duman", 48:"Şaxtalı duman",
+  51:"Yüngül çiskin", 53:"Orta çiskin", 55:"Sıx çiskin",
+  61:"Yüngül yağış", 63:"Orta yağış", 65:"Güclü yağış",
+  71:"Yüngül qar", 73:"Orta qar", 75:"Güclü qar",
+  80:"Yüngül leysan", 81:"Orta leysan", 82:"Güclü leysan",
+  95:"Tufan", 96:"Dolu ilə tufan", 99:"Güclü dolu ilə tufan"
+};
+
+const form = document.getElementById('searchForm');
+const input = document.getElementById('cityInput');
+const result = document.getElementById('result');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const city = input.value.trim();
+  if(!city) return;
+
+  result.innerHTML = '<p class="msg loading">Yüklənir...</p>';
+
+  try {
+    // 1) Şəhərin koordinatlarını tapmaq (geokodlaşdırma)
+    const geoRes = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=az&format=json`
+    );
+    const geoData = await geoRes.json();
+
+    if (!geoData.results || geoData.results.length === 0) {
+      result.innerHTML = '<p class="msg">Şəhər tapılmadı. Başqa ad yoxlayın.</p>';
+      return;
+    }
+
+    const { latitude, longitude, name, country } = geoData.results[0];
+
+    // 2) Həmin koordinatlar üçün cari hava məlumatı
+    const weatherRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`
+    );
+    const weatherData = await weatherRes.json();
+    const cur = weatherData.current;
+
+    const desc = codeMap[cur.weather_code] || "Naməlum";
+
+    result.innerHTML = `
+      <div class="desc">${name}, ${country}</div>
+      <div class="temp">${Math.round(cur.temperature_2m)}°C</div>
+      <div class="desc">${desc}</div>
+      <div class="grid">
+        <div class="stat">Nəm<b>${cur.relative_humidity_2m}%</b></div>
+        <div class="stat">Külək<b>${cur.wind_speed_10m} km/s</b></div>
+      </div>
+    `;
+  } catch (err) {
+    result.innerHTML = '<p class="msg">Xəta baş verdi. İnternet bağlantısını yoxlayın.</p>';
+  }
+});
+</script>
+</body>
+</html>
